@@ -50,7 +50,7 @@ func SavePrivateFiles(prefix string, cert *ssh.Certificate, key Key) error {
 		return nil
 	}
 	_prefix := prefix + "/id_" + cert.KeyId
-	pemBlock, err := pemBlockForKey(key);
+	pemBlock, err := pemBlockForKey(key)
 	if err != nil {
 		return err
 	}
