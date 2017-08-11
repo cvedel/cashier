@@ -35,6 +35,7 @@ includes all calls to the following services:
 - [x] Namespaces
 - [x] Settings
 - [x] Pipelines
+- [x] Version
 
 ## Usage
 
@@ -57,7 +58,7 @@ to list all projects for user "svanharmelen":
 
 ```go
 git := gitlab.NewClient(nil)
-opt := &ListProjectsOptions{Search: gitlab.String("svanharmelen")})
+opt := &ListProjectsOptions{Search: gitlab.String("svanharmelen")}
 projects, _, err := git.Projects.ListProjects(opt)
 ```
 

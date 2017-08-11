@@ -74,6 +74,7 @@ type Project struct {
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool                 `json:"only_allow_merge_if_all_discussions_are_resolved"`
 	LFSEnabled                                bool                 `json:"lfs_enabled"`
 	RequestAccessEnabled                      bool                 `json:"request_access_enabled"`
+	ForkedFromProject                         *ForkParent          `json:"forked_from_project"`
 	SharedWithGroups                          []struct {
 		GroupID          int    `json:"group_id"`
 		GroupName        string `json:"group_name"`
@@ -143,6 +144,17 @@ type GroupAccess struct {
 	NotificationLevel NotificationLevelValue `json:"notification_level"`
 }
 
+// ForkParent represents the parent project when this is a fork.
+type ForkParent struct {
+	HTTPURLToRepo     string `json:"http_url_to_repo"`
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	NameWithNamespace string `json:"name_with_namespace"`
+	Path              string `json:"path"`
+	PathWithNamespace string `json:"path_with_namespace"`
+	WebURL            string `json:"web_url"`
+}
+
 func (s Project) String() string {
 	return Stringify(s)
 }
@@ -162,12 +174,31 @@ type ListProjectsOptions struct {
 	Statistics *bool   `url:"statistics,omitempty" json:"statistics,omitempty"`
 }
 
-// ListProjects gets a list of projects accessible by the authenticated user.
+// ListProjects gets a list of projects for which the authenticated user is a member
 //
 // GitLab API docs:
 // https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/projects.md#list-projects
 func (s *ProjectsService) ListProjects(opt *ListProjectsOptions, options ...OptionFunc) ([]*Project, *Response, error) {
 	req, err := s.client.NewRequest("GET", "projects", opt, options)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var p []*Project
+	resp, err := s.client.Do(req, &p)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return p, resp, err
+}
+
+// ListVisibleProjects gets a list of projects accessible by the authenticated user.
+//
+// GitLab API docs:
+// https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/projects.md#list-projects
+func (s *ProjectsService) ListVisibleProjects(opt *ListProjectsOptions, options ...OptionFunc) ([]*Project, *Response, error) {
+	req, err := s.client.NewRequest("GET", "projects/visible", opt, options)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -366,24 +397,26 @@ func (s *ProjectsService) GetProjectEvents(pid interface{}, opt *GetProjectEvent
 // GitLab API docs:
 // https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/projects.md#create-project
 type CreateProjectOptions struct {
-	Name                          *string               `url:"name,omitempty" json:"name,omitempty"`
-	Path                          *string               `url:"path,omitempty" json:"path,omitempty"`
-	NamespaceID                   *int                  `url:"namespace_id,omitempty" json:"namespace_id,omitempty"`
-	Description                   *string               `url:"description,omitempty" json:"description,omitempty"`
-	IssuesEnabled                 *bool                 `url:"issues_enabled,omitempty" json:"issues_enabled,omitempty"`
-	MergeRequestsEnabled          *bool                 `url:"merge_requests_enabled,omitempty" json:"merge_requests_enabled,omitempty"`
-	BuildsEnabled                 *bool                 `url:"builds_enabled,omitempty" json:"builds_enabled,omitempty"`
-	WikiEnabled                   *bool                 `url:"wiki_enabled,omitempty" json:"wiki_enabled,omitempty"`
-	SnippetsEnabled               *bool                 `url:"snippets_enabled,omitempty" json:"snippets_enabled,omitempty"`
-	ContainerRegistryEnabled      *bool                 `url:"container_registry_enabled,omitempty" json:"container_registry_enabled,omitempty"`
-	SharedRunnersEnabled          *bool                 `url:"shared_runners_enabled,omitempty" json:"shared_runners_enabled,omitempty"`
-	Public                        *bool                 `url:"public,omitempty" json:"public,omitempty"`
-	VisibilityLevel               *VisibilityLevelValue `url:"visibility_level,omitempty" json:"visibility_level,omitempty"`
-	ImportURL                     *string               `url:"import_url,omitempty" json:"import_url,omitempty"`
-	PublicBuilds                  *bool                 `url:"public_builds,omitempty" json:"public_builds,omitempty"`
-	OnlyAllowMergeIfBuildSucceeds *bool                 `url:"only_allow_merge_if_build_succeeds,omitempty" json:"only_allow_merge_if_build_succeeds,omitempty"`
-	LFSEnabled                    *bool                 `url:"lfs_enabled,omitempty" json:"lfs_enabled,omitempty"`
-	RequestAccessEnabled          *bool                 `url:"request_access_enabled,omitempty" json:"request_access_enabled,omitempty"`
+	Name                                      *string               `url:"name,omitempty" json:"name,omitempty"`
+	Path                                      *string               `url:"path,omitempty" json:"path,omitempty"`
+	DefaultBranch                             *string               `url:"default_branch,omitempty" json:"default_branch,omitempty"` // note: this does not work
+	NamespaceID                               *int                  `url:"namespace_id,omitempty" json:"namespace_id,omitempty"`
+	Description                               *string               `url:"description,omitempty" json:"description,omitempty"`
+	IssuesEnabled                             *bool                 `url:"issues_enabled,omitempty" json:"issues_enabled,omitempty"`
+	MergeRequestsEnabled                      *bool                 `url:"merge_requests_enabled,omitempty" json:"merge_requests_enabled,omitempty"`
+	BuildsEnabled                             *bool                 `url:"builds_enabled,omitempty" json:"builds_enabled,omitempty"`
+	WikiEnabled                               *bool                 `url:"wiki_enabled,omitempty" json:"wiki_enabled,omitempty"`
+	SnippetsEnabled                           *bool                 `url:"snippets_enabled,omitempty" json:"snippets_enabled,omitempty"`
+	ContainerRegistryEnabled                  *bool                 `url:"container_registry_enabled,omitempty" json:"container_registry_enabled,omitempty"`
+	SharedRunnersEnabled                      *bool                 `url:"shared_runners_enabled,omitempty" json:"shared_runners_enabled,omitempty"`
+	Public                                    *bool                 `url:"public,omitempty" json:"public,omitempty"`
+	VisibilityLevel                           *VisibilityLevelValue `url:"visibility_level,omitempty" json:"visibility_level,omitempty"`
+	ImportURL                                 *string               `url:"import_url,omitempty" json:"import_url,omitempty"`
+	PublicBuilds                              *bool                 `url:"public_builds,omitempty" json:"public_builds,omitempty"`
+	OnlyAllowMergeIfBuildSucceeds             *bool                 `url:"only_allow_merge_if_build_succeeds,omitempty" json:"only_allow_merge_if_build_succeeds,omitempty"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved *bool                 `url:"only_allow_merge_if_all_discussions_are_resolved,omitempty" json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`
+	LFSEnabled                                *bool                 `url:"lfs_enabled,omitempty" json:"lfs_enabled,omitempty"`
+	RequestAccessEnabled                      *bool                 `url:"request_access_enabled,omitempty" json:"request_access_enabled,omitempty"`
 }
 
 // CreateProject creates a new project owned by the authenticated user.
@@ -406,22 +439,12 @@ func (s *ProjectsService) CreateProject(opt *CreateProjectOptions, options ...Op
 }
 
 // CreateProjectForUserOptions represents the available CreateProjectForUser()
-// options.
+// options; these are identical to those for an ordinary Project, since the
+// required "user_id" parameter is provided in the request URL.
 //
 // GitLab API docs:
 // https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/projects.md#create-project-for-user
-type CreateProjectForUserOptions struct {
-	Name                 *string               `url:"name,omitempty" json:"name,omitempty"`
-	Description          *string               `url:"description,omitempty" json:"description,omitempty"`
-	DefaultBranch        *string               `url:"default_branch,omitempty" json:"default_branch,omitempty"`
-	IssuesEnabled        *bool                 `url:"issues_enabled,omitempty" json:"issues_enabled,omitempty"`
-	MergeRequestsEnabled *bool                 `url:"merge_requests_enabled,omitempty" json:"merge_requests_enabled,omitempty"`
-	WikiEnabled          *bool                 `url:"wiki_enabled,omitempty" json:"wiki_enabled,omitempty"`
-	SnippetsEnabled      *bool                 `url:"snippets_enabled,omitempty" json:"snippets_enabled,omitempty"`
-	Public               *bool                 `url:"public,omitempty" json:"public,omitempty"`
-	VisibilityLevel      *VisibilityLevelValue `url:"visibility_level,omitempty" json:"visibility_level,omitempty"`
-	ImportURL            *string               `url:"import_url,omitempty" json:"import_url,omitempty"`
-}
+type CreateProjectForUserOptions CreateProjectOptions
 
 // CreateProjectForUser creates a new project owned by the specified user.
 // Available only for admins.

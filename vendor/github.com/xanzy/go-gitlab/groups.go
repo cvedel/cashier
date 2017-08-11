@@ -18,6 +18,7 @@ package gitlab
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -35,12 +36,17 @@ type GroupsService struct {
 // GitLab API docs:
 // https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/groups.md
 type Group struct {
-	ID          int                `json:"id"`
-	Name        string             `json:"name"`
-	Path        string             `json:"path"`
-	Description string             `json:"description"`
-	Projects    []*Project         `json:"projects"`
-	Statistics  *StorageStatistics `json:"statistics"`
+	ID                   int                  `json:"id"`
+	Name                 string               `json:"name"`
+	Path                 string               `json:"path"`
+	Description          string               `json:"description"`
+	AvatarURL            string               `json:"avatar_url"`
+	LFSEnabled           bool                 `json:"lfs_enabled"`
+	Projects             []*Project           `json:"projects"`
+	Statistics           *StorageStatistics   `json:"statistics"`
+	RequestAccessEnabled bool                 `json:"request_access_enabled"`
+	VisibilityLevel      VisibilityLevelValue `json:"visibility_level"`
+	WebURL               string               `json:"web_url"`
 }
 
 // ListGroupsOptions represents the available ListGroups() options.
@@ -81,7 +87,7 @@ func (s *GroupsService) GetGroup(gid interface{}, options ...OptionFunc) (*Group
 	if err != nil {
 		return nil, nil, err
 	}
-	u := fmt.Sprintf("groups/%s", group)
+	u := fmt.Sprintf("groups/%s", url.QueryEscape(group))
 
 	req, err := s.client.NewRequest("GET", u, nil, options)
 	if err != nil {
@@ -102,10 +108,12 @@ func (s *GroupsService) GetGroup(gid interface{}, options ...OptionFunc) (*Group
 // GitLab API docs:
 // https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/groups.md#new-group
 type CreateGroupOptions struct {
-	Name            *string               `url:"name,omitempty" json:"name,omitempty"`
-	Path            *string               `url:"path,omitempty" json:"path,omitempty"`
-	Description     *string               `url:"description,omitempty" json:"description,omitempty"`
-	VisibilityLevel *VisibilityLevelValue `url:"visibility_level" json:"visibility_level,omitempty"`
+	Name                 *string               `url:"name,omitempty" json:"name,omitempty"`
+	Path                 *string               `url:"path,omitempty" json:"path,omitempty"`
+	Description          *string               `url:"description,omitempty" json:"description,omitempty"`
+	LFSEnabled           *bool                 `url:"lfs_enabled,omitempty" json:"lfs_enabled,omitempty"`
+	RequestAccessEnabled *bool                 `url:"request_access_enabled,omitempty" json:"request_access_enabled,omitempty"`
+	VisibilityLevel      *VisibilityLevelValue `url:"visibility_level,omitempty" json:"visibility_level,omitempty"`
 }
 
 // CreateGroup creates a new project group. Available only for users who can
@@ -115,6 +123,39 @@ type CreateGroupOptions struct {
 // https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/groups.md#new-group
 func (s *GroupsService) CreateGroup(opt *CreateGroupOptions, options ...OptionFunc) (*Group, *Response, error) {
 	req, err := s.client.NewRequest("POST", "groups", opt, options)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	g := new(Group)
+	resp, err := s.client.Do(req, g)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return g, resp, err
+}
+
+// UpdateGroupOptions represents the set of available options to update a Group;
+// as of today these are exactly the same available when creating a new Group.
+//
+// GitLab API docs:
+// https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/groups.md#update-group
+type UpdateGroupOptions CreateGroupOptions
+
+// UpdateGroup updates an existing group; only available to group owners and
+// administrators.
+//
+// GitLab API docs:
+// https://gitlab.com/gitlab-org/gitlab-ce/blob/8-16-stable/doc/api/groups.md#update-group
+func (s *GroupsService) UpdateGroup(gid interface{}, opt *UpdateGroupOptions, options ...OptionFunc) (*Group, *Response, error) {
+	group, err := parseID(gid)
+	if err != nil {
+		return nil, nil, err
+	}
+	u := fmt.Sprintf("groups/%s", url.QueryEscape(group))
+
+	req, err := s.client.NewRequest("PUT", u, opt, options)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -138,7 +179,7 @@ func (s *GroupsService) TransferGroup(gid interface{}, project int, options ...O
 	if err != nil {
 		return nil, nil, err
 	}
-	u := fmt.Sprintf("groups/%s/projects/%d", group, project)
+	u := fmt.Sprintf("groups/%s/projects/%d", url.QueryEscape(group), project)
 
 	req, err := s.client.NewRequest("POST", u, nil, options)
 	if err != nil {
@@ -163,7 +204,7 @@ func (s *GroupsService) DeleteGroup(gid interface{}, options ...OptionFunc) (*Re
 	if err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("groups/%s", group)
+	u := fmt.Sprintf("groups/%s", url.QueryEscape(group))
 
 	req, err := s.client.NewRequest("DELETE", u, nil, options)
 	if err != nil {
@@ -230,7 +271,7 @@ func (s *GroupsService) ListGroupMembers(gid interface{}, opt *ListGroupMembersO
 	if err != nil {
 		return nil, nil, err
 	}
-	u := fmt.Sprintf("groups/%s/members", group)
+	u := fmt.Sprintf("groups/%s/members", url.QueryEscape(group))
 
 	req, err := s.client.NewRequest("GET", u, opt, options)
 	if err != nil {
@@ -264,7 +305,7 @@ func (s *GroupsService) ListGroupProjects(gid interface{}, opt *ListGroupProject
 	if err != nil {
 		return nil, nil, err
 	}
-	u := fmt.Sprintf("groups/%s/projects", group)
+	u := fmt.Sprintf("groups/%s/projects", url.QueryEscape(group))
 
 	req, err := s.client.NewRequest("GET", u, opt, options)
 	if err != nil {
@@ -298,7 +339,7 @@ func (s *GroupsService) AddGroupMember(gid interface{}, opt *AddGroupMemberOptio
 	if err != nil {
 		return nil, nil, err
 	}
-	u := fmt.Sprintf("groups/%s/members", group)
+	u := fmt.Sprintf("groups/%s/members", url.QueryEscape(group))
 
 	req, err := s.client.NewRequest("POST", u, opt, options)
 	if err != nil {
@@ -332,7 +373,7 @@ func (s *GroupsService) UpdateGroupMember(gid interface{}, user int, opt *Update
 	if err != nil {
 		return nil, nil, err
 	}
-	u := fmt.Sprintf("groups/%s/members/%d", group, user)
+	u := fmt.Sprintf("groups/%s/members/%d", url.QueryEscape(group), user)
 
 	req, err := s.client.NewRequest("PUT", u, opt, options)
 	if err != nil {
@@ -357,7 +398,7 @@ func (s *GroupsService) RemoveGroupMember(gid interface{}, user int, options ...
 	if err != nil {
 		return nil, err
 	}
-	u := fmt.Sprintf("groups/%s/members/%d", group, user)
+	u := fmt.Sprintf("groups/%s/members/%d", url.QueryEscape(group), user)
 
 	req, err := s.client.NewRequest("DELETE", u, nil, options)
 	if err != nil {
