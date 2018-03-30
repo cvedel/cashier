@@ -7,9 +7,9 @@
 set -xue
 
 go install -race -v ./cmd/cashier ./cmd/cashierd
-go list ./... |grep -v vendor/ |xargs go test -race
+go test -race ./...
 gofmt -d $(find * -type f -name '*.go' -not -path 'vendor/*')
-go list ./... |grep -v vendor/ |xargs go vet
+go vet ./...
 if ! type -f golint > /dev/null; then
   go get -u github.com/golang/lint/golint
 fi
